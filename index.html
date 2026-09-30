@@ -137,15 +137,19 @@ footer{padding:22px 5vw;font-size:11.5px;color:var(--gris)}
 <div class="tablewrap"><table id="tc"><thead><tr>
 <th onclick="sortBy('n')">Corredor</th><th onclick="sortBy('s')">Segmento</th><th onclick="sortBy('c')">Cat</th>
 <th onclick="sortBy('rg')">Región</th><th onclick="sortBy('e')">Ejecutivo</th><th onclick="sortBy('t')">Tendencia</th>
-<th class="num" onclick="sortBy('pp25')" id="thPP25">Portal+SS 2025</th>
-<th class="num" onclick="sortBy('pt25')" id="thPT25">Tradic. 2025</th>
-<th class="num" onclick="sortBy('p25')"  id="thP25">Total 2025</th>
+<th class="num" onclick="sortBy('pp25y')" id="thPPY">Portal+SS 2025 ene-ago</th>
+<th class="num" onclick="sortBy('pt25y')" id="thPTY">Tradic. 2025 ene-ago</th>
+<th class="num" onclick="sortBy('p25y')"  id="thPY">Total 2025 ene-ago</th>
 <th class="num" onclick="sortBy('pp26')" id="thPP26">Portal+SS 2026</th>
 <th class="num" onclick="sortBy('pt26')" id="thPT26">Tradic. 2026</th>
 <th class="num" onclick="sortBy('p26')"  id="thP26">Total 2026</th>
+<th class="num" onclick="sortBy('crec')" id="thCREC">% Crec. 26/25</th>
 <th class="num" onclick="sortBy('fecu')"   id="thFECU">FECU</th>
 <th class="num" onclick="sortBy('head')"   id="thHEAD">Headroom</th>
 <th class="num" onclick="sortBy('pen')" id="thPEN">Penetración</th>
+<th class="num" onclick="sortBy('pp25')" id="thPP25">Portal+SS 2025 completo</th>
+<th class="num" onclick="sortBy('pt25')" id="thPT25">Tradic. 2025 completo</th>
+<th class="num" onclick="sortBy('p25')"  id="thP25">Total 2025 completo</th>
 </tr></thead><tbody></tbody></table></div>
 <div class="pager" id="pager"></div>
 
@@ -235,17 +239,22 @@ function refreshProd(){
   apply();
 }
 
+// ==== 2025 mismo periodo (ene-ago) y crecimiento 26/25 — respeta canal y tipo ====
+function g26(x){return tipoField==='pt26'?{pp:x.ppvn||0,pt:x.ptvn||0}:tipoField==='pp26'?{pp:x.pprn||0,pt:x.ptrn||0}:{pp:x.pp26||0,pt:x.pt26||0};}
+function g25y(x){return tipoField==='pt26'?{pp:x.ppvn25y||0,pt:x.ptvn25y||0}:tipoField==='pp26'?{pp:x.pprn25y||0,pt:x.ptrn25y||0}:{pp:x.pp25y||0,pt:x.pt25y||0};}
+function pick(v){return canalField==='pp26'?v.pp:canalField==='pt26'?v.pt:v.pp+v.pt;}
+function crecOf(a26,a25){return a25>0?(a26/a25-1)*100:null;}
+function crecX(x){return crecOf(pick(g26(x)),pick(g25y(x)));}
+function fmtCrec(c,a26){if(c==null)return a26>0?'<span style="color:#2a78d6">Nuevo</span>':'—';
+ const col=c>=0?'#1BAF7A':'#B3261E';return `<span style="color:${col};font-weight:600">${c>=0?'+':''}${c.toFixed(1).replace('.',',')}%</span>`;}
+const MLBL=' ene-'+['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][(META.mes||8)-1];
+
 // Tendencia dinámica GLOBAL — depende de canalField y tipoField actuales
 function tendDinG(x){
-  const v26=(tipoField==='pt26')?{pp:x.ppvn||0,pt:x.ptvn||0}:(tipoField==='pp26')?{pp:x.pprn||0,pt:x.ptrn||0}:{pp:x.pp26||0,pt:x.pt26||0};
-  const v25=(tipoField==='pt26')?{pp:x.ppvn25||0,pt:x.ptvn25||0}:(tipoField==='pp26')?{pp:x.pprn25||0,pt:x.ptrn25||0}:{pp:x.pp25||0,pt:x.pt25||0};
-  let r26,r25;
-  if(canalField==='pp26'){r26=v26.pp;r25=v25.pp;}
-  else if(canalField==='pt26'){r26=v26.pt;r25=v25.pt;}
-  else {r26=v26.pp+v26.pt;r25=v25.pp+v25.pt;}
-  const MES=META.mes||7; const proy=r26/MES*12;
-  if(r25<=0) return proy>0?'Nuevo':'Sin actividad';
-  const ra=proy/r25;
+  // Tendencia homologada: 2026 ene-ago vs 2025 mismo periodo (mismo criterio que % Crec.), según canal y tipo
+  const r26=pick(g26(x)), r25=pick(g25y(x));
+  if(r25<=0) return r26>0?'Nuevo':'Sin actividad';
+  const ra=r26/r25;
   if(ra>1.15) return 'Creciendo';
   if(ra>=0.95) return 'Estable';
   if(ra>=0.6) return 'Cayendo';
@@ -295,9 +304,12 @@ function kpis(d){
  const cardTrad   = showTrad?`<div class="card" style="border-top:3px solid ${C_PT};background:#ede9fb"><div class="k">Tradicional ${META.anio}${tipoTxt} (UF)</div><div class="v" style="color:${C_PT}">${fmt(trad)}</div></div>`:'';
  const cardTotal  = showTotal?`<div class="card" style="border-top:3px solid ${C_TOT};background:#edfaf5"><div class="k">Total ${META.anio}${tipoTxt} (UF)</div><div class="v" style="color:${C_TOT}">${fmt(total)}</div></div>`:'';
  // 2025 (solo si canal=all y tipo=all, para no confundir; si hay filtro mostramos totales atenuados)
- const card25P = showPortal?`<div class="card" style="border-top:3px solid ${C_PP}"><div class="k">Portal+SS ${META.anio_ant}${tipoTxt} (UF)</div><div class="v" style="color:${C_PP}">${fmt(pp25)}</div></div>`:'';
- const card25T = showTrad?`<div class="card" style="border-top:3px solid ${C_PT}"><div class="k">Tradicional ${META.anio_ant}${tipoTxt} (UF)</div><div class="v" style="color:${C_PT}">${fmt(pt25)}</div></div>`:'';
- const card25Tot = showTotal?`<div class="card" style="border-top:3px solid #231A3C"><div class="k">Total ${META.anio_ant}${tipoTxt} (UF)</div><div class="v" style="color:#231A3C">${fmt(p25)}</div></div>`:'';
+ // 2025 mismo periodo (ene-ago) para comparación homologable
+ let py,ty; if(tipo==='pt26'){py=S('ppvn25y');ty=S('ptvn25y');} else if(tipo==='pp26'){py=S('pprn25y');ty=S('ptrn25y');} else {py=S('pp25y');ty=S('pt25y');}
+ const dl=(a,b)=>{const c=crecOf(a,b);return `<div style="font-size:11px;margin-top:2px">${fmtCrec(c,a)} vs ${META.anio_ant}${MLBL}</div>`;};
+ const card25P = showPortal?`<div class="card" style="border-top:3px solid ${C_PP}"><div class="k">Portal+SS ${META.anio_ant}${MLBL}${tipoTxt} (UF)</div><div class="v" style="color:${C_PP}">${fmt(py)}</div>${dl(portal,py)}</div>`:'';
+ const card25T = showTrad?`<div class="card" style="border-top:3px solid ${C_PT}"><div class="k">Tradicional ${META.anio_ant}${MLBL}${tipoTxt} (UF)</div><div class="v" style="color:${C_PT}">${fmt(ty)}</div>${dl(trad,ty)}</div>`:'';
+ const card25Tot = showTotal?`<div class="card" style="border-top:3px solid #231A3C"><div class="k">Total ${META.anio_ant}${MLBL}${tipoTxt} (UF)</div><div class="v" style="color:#231A3C">${fmt(py+ty)}</div>${dl(total,py+ty)}</div>`:'';
  const card25 = card25P+card25T+card25Tot;
  document.getElementById('kpis').innerHTML=
  `<div class="card"><div class="k">Corredores</div><div class="v">${d.length}</div></div>
@@ -342,6 +354,10 @@ function sortVal(x,k){
     case 'pp25': return v25.pp;
     case 'pt25': return v25.pt;
     case 'p25':  return v25.pp+v25.pt;
+    case 'pp25y': return g25y(x).pp;
+    case 'pt25y': return g25y(x).pt;
+    case 'p25y':  {const w=g25y(x);return w.pp+w.pt;}
+    case 'crec': {const c=crecX(x);return c==null?-1e9:c;}
     default: return x[k];
   }
 }
@@ -395,32 +411,44 @@ function tabla(d){
  document.getElementById('thP26').style.background=GRN_BASE;
  // 2025 se mantiene completo (sin desglose por tipo en la fuente) — se atenúa si hay filtro de tipo
  const dim25 = false;
- document.getElementById('thPP25').textContent='Portal+SS '+META.anio_ant+tipoTxt;
- document.getElementById('thPT25').textContent='Tradic. '+META.anio_ant+tipoTxt;
+ document.getElementById('thPP25').textContent='Portal+SS '+META.anio_ant+' completo'+tipoTxt;
+ document.getElementById('thPT25').textContent='Tradic. '+META.anio_ant+' completo'+tipoTxt;
+ document.getElementById('thP25').textContent='Total '+META.anio_ant+' completo'+tipoTxt;
+ document.getElementById('thPPY').textContent='Portal+SS '+META.anio_ant+MLBL+tipoTxt;
+ document.getElementById('thPTY').textContent='Tradic. '+META.anio_ant+MLBL+tipoTxt;
+ document.getElementById('thPY').textContent='Total '+META.anio_ant+MLBL+tipoTxt;
+ document.getElementById('thPPY').style.display=showPP?'':'none';
+ document.getElementById('thPTY').style.display=showPT?'':'none';
+ document.getElementById('thPY').style.display=showTot?'':'none';
+ ['thPPY','thPTY','thPY'].forEach(id=>document.getElementById(id).style.background=MOR_BASE);
+ document.getElementById('thCREC').style.background='#231A3C';
+ document.getElementById('thCREC').textContent='% Crec. '+String(META.anio).slice(2)+'/'+String(META.anio_ant).slice(2)+(canalField==='pp26'?' Portal':canalField==='pt26'?' Trad.':' Total');
  document.getElementById('thPP25').style.display=showPP?'':'none';
  document.getElementById('thPT25').style.display=showPT?'':'none';
  document.getElementById('thP25').style.display=showTot?'':'none';
- document.getElementById('thPP25').style.background=dim25?'#7a5aaa':MOR_BASE;
- document.getElementById('thPT25').style.background=dim25?'#7a5aaa':MOR_BASE;
- document.getElementById('thP25').style.background=dim25?'#7a5aaa':MOR_BASE;
+ ['thPP25','thPT25','thP25'].forEach(id=>document.getElementById(id).style.background='#7a5aaa');
  document.getElementById('thFECU').style.background=GRY;
  document.getElementById('thHEAD').style.background=GRY;
  document.querySelector('#tc tbody').innerHTML=rows.map(x=>{
-  const v=val26(x); const v25=val25(x);
+  const v=val26(x); const v25=val25(x); const vy=g25y(x);
   return `<tr>
   <td>${x.n}</td>
   <td><span class="pill" style="background:${COLS[x.s]}">${x.s}</span></td>
   <td>${x.c||''}</td><td>${x.rg||''}</td>
   <td style="font-size:11px">${x.e}</td><td>${tendDinG(x)}</td>
-  <td class="num" ${showPP?'':'style=display:none'} style="color:#4A1E8C">${fmt(v25.pp)}</td>
-  <td class="num" ${showPT?'':'style=display:none'} style="color:#4A1E8C">${fmt(v25.pt)}</td>
-  <td class="num" ${showTot?'':'style=display:none'} style="color:#231A3C">${fmt(v25.pp+v25.pt)}</td>
+  <td class="num" ${showPP?'':'style=display:none'} style="color:#4A1E8C">${fmt(vy.pp)}</td>
+  <td class="num" ${showPT?'':'style=display:none'} style="color:#4A1E8C">${fmt(vy.pt)}</td>
+  <td class="num" ${showTot?'':'style=display:none'} style="color:#231A3C">${fmt(vy.pp+vy.pt)}</td>
   <td class="num" ${showPP?'':'style=display:none'} style="color:#1B7A50">${fmt(v.pp)}</td>
   <td class="num" ${showPT?'':'style=display:none'} style="color:#1B7A50">${fmt(v.pt)}</td>
   <td class="num" ${showTot?'':'style=display:none'} style="color:#0f5235">${fmt(v.pp+v.pt)}</td>
+  <td class="num">${fmtCrec(crecX(x),pick(v))}</td>
   <td class="num" style="color:#374151">${fmt(x.fecu)}</td>
   <td class="num" style="color:#374151"><b>${fmt(x.head)}</b></td>
   <td class="num" style="color:#374151">${x.pen!=null?x.pen.toFixed(1)+'%':'—'}</td>
+  <td class="num" ${showPP?'':'style=display:none'} style="color:#7a5aaa">${fmt(v25.pp)}</td>
+  <td class="num" ${showPT?'':'style=display:none'} style="color:#7a5aaa">${fmt(v25.pt)}</td>
+  <td class="num" ${showTot?'':'style=display:none'} style="color:#7a5aaa">${fmt(v25.pp+v25.pt)}</td>
  </tr>`;}).join('');
  document.getElementById('nres').textContent='('+d.length+' en filtro)';
  pager(d.length,np);
@@ -432,20 +460,24 @@ function downloadXLS(){
  const v25x=(x)=>tipoField==='pt26'?{pp:x.ppvn25||0,pt:x.ptvn25||0}:tipoField==='pp26'?{pp:x.pprn25||0,pt:x.ptrn25||0}:{pp:x.pp25||0,pt:x.pt25||0};
  const tendDinXLS=(x)=>{const v=v26x(x),w=v25x(x);let r26,r25;if(canalField==='pp26'){r26=v.pp;r25=w.pp;}else if(canalField==='pt26'){r26=v.pt;r25=w.pt;}else{r26=v.pp+v.pt;r25=w.pp+w.pt;}const proy=r26/MESx*12;if(r25<=0)return proy>0?'Nuevo':'Sin actividad';const ra=proy/r25;return ra>1.15?'Creciendo':ra>=0.95?'Estable':ra>=0.6?'Cayendo':'Cayendo fuerte';};
  const ordered=[...F].sort((a,b)=>{const av=sortVal(a,sortK),bv=sortVal(b,sortK);return (av>bv?1:av<bv?-1:0)*sortD;});
+ const tt=(tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':'');
  const header=['Corredor','Segmento','Categoría','Región','Ejecutivo','Tendencia',
-   'Portal+SS '+META.anio_ant,'Tradicional '+META.anio_ant,'Total '+META.anio_ant,
-   'Portal+SS '+META.anio+(tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':''),'Tradicional '+META.anio+(tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':''),'Total '+META.anio+(tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':''),
-   'FECU elegible','Headroom','Penetración %'];
- const v26=(x)=>tipoField==='pt26'?{pp:x.ppvn||0,pt:x.ptvn||0}:tipoField==='pp26'?{pp:x.pprn||0,pt:x.ptrn||0}:{pp:x.pp26||0,pt:x.pt26||0};
- const rows=ordered.map(x=>{const v=v26(x);return [
+   'Portal+SS '+META.anio_ant+MLBL+tt,'Tradicional '+META.anio_ant+MLBL+tt,'Total '+META.anio_ant+MLBL+tt,
+   'Portal+SS '+META.anio+tt,'Tradicional '+META.anio+tt,'Total '+META.anio+tt,
+   '% Crec. '+META.anio+'/'+META.anio_ant+(canalField==='pp26'?' Portal':canalField==='pt26'?' Trad.':' Total'),
+   'FECU elegible','Headroom','Penetración %',
+   'Portal+SS '+META.anio_ant+' completo'+tt,'Tradicional '+META.anio_ant+' completo'+tt,'Total '+META.anio_ant+' completo'+tt];
+ const rows=ordered.map(x=>{const v=v26x(x),w=v25x(x),y=g25y(x),c=crecX(x);return [
   x.n,x.s,x.c||'',x.rg||'',x.e,tendDinG(x),
-  x.pp25||0,x.pt25||0,x.p25,
+  y.pp,y.pt,y.pp+y.pt,
   v.pp,v.pt,v.pp+v.pt,
-  x.fecu,x.head,x.pen!=null?x.pen:''
+  c==null?'':Math.round(c*10)/10,
+  x.fecu,x.head,x.pen!=null?x.pen:'',
+  w.pp,w.pt,w.pp+w.pt
  ];});
  const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
  ws['!cols']=[{wch:50},{wch:18},{wch:14},{wch:16},{wch:28},{wch:14},
-  {wch:16},{wch:16},{wch:12},{wch:16},{wch:16},{wch:12},{wch:14},{wch:14}];
+  {wch:18},{wch:18},{wch:16},{wch:16},{wch:16},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:20},{wch:20},{wch:18}];
  const wb=XLSX.utils.book_new();
  XLSX.utils.book_append_sheet(wb,ws,'Corredores ANS');
  const tipo=prodField==='all'?'Todos':prodField==='pp26'?'Portal_Renovacion':'Tradicional_VentaNueva';
