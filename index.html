@@ -87,10 +87,22 @@ footer{padding:22px 5vw;font-size:11.5px;color:var(--gris)}
  table{font-size:11.5px}
  .filtros select,.filtros input{min-width:44%}
 }
+.vtabs{display:flex;gap:0;margin:0 0 14px;border-bottom:2px solid var(--bd)}
+.vtab{padding:11px 22px;border:none;background:none;font-size:14px;font-weight:700;color:var(--gris);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.vtab:hover{color:var(--mor)}
+.vtab.on{color:var(--mor);border-bottom-color:var(--mor)}
+.card .l{font-size:11.5px;color:var(--gris);margin-top:3px}
+#ta tfoot td{font-weight:700;background:#F4F1FA;border-top:2px solid var(--mor)}
+.aggnote{font-size:11.5px;color:var(--gris);background:#fff;border:1px dashed #cfc9e0;border-radius:8px;padding:8px 12px;margin:8px 0}
 </style></head><body>
 <header><h1>Segmentación de Corredores &amp; Productividad — ANS</h1>
 <p id="hdr"></p></header>
 <main>
+<div class="vtabs">
+  <button class="vtab on" id="vt-corr" onclick="setVista('corr')">Vista Corredor</button>
+  <button class="vtab" id="vt-cia" onclick="setVista('cia')">Vista Compañía</button>
+  <button class="vtab" id="vt-ramo" onclick="setVista('ramo')">Vista Ramo</button>
+</div>
 <div class="filtros" style="margin-top:0;padding:10px 14px;flex-direction:column;gap:10px">
   <div class="tprod">
     <span class="tprod-label">Canal:</span>
@@ -118,6 +130,7 @@ footer{padding:22px 5vw;font-size:11.5px;color:var(--gris)}
 </div>
 
 
+<div id="viewCorr">
 <h2>Matriz valor × <span id="ejeLabel">penetración</span></h2>
 <div style="display:flex;gap:8px;margin:8px 0 4px">
   <button id="btn-pen" onclick="setEjeY('pen')" style="padding:7px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:bold;font-size:12px;background:#4A1E8C;color:#fff">Penetración (%)</button>
@@ -165,6 +178,21 @@ footer{padding:22px 5vw;font-size:11.5px;color:var(--gris)}
 <div class="box" style="margin-top:14px"><h3>Evolución mensual de la selección</h3><div class="cbx" style="height:280px"><canvas id="cmes"></canvas></div></div>
 <div class="box" style="margin-top:14px"><h3>Potencial FECU por ramo — mercado del corredor (ramos elegibles)</h3><div class="cbx" style="height:420px"><canvas id="cfecu"></canvas></div></div>
 <p class="note">Tradicionales no tiene apertura de ramo en la fuente, por eso el gráfico de ramos considera solo Portal+SS. La venta del año en curso llega hasta el último mes de producción real cargado.</p>
+</div>
+<div id="viewAgg" style="display:none">
+<div class="aggnote" id="aggnote"></div>
+<h2 id="aggChartT">Real vs Ppto</h2>
+<p class="sub" id="aggChartS"></p>
+<div class="box"><div class="cbx" style="height:420px"><canvas id="cagg"></canvas></div></div>
+<div class="tabla-hdr">
+  <div>
+    <h2 style="margin:30px 0 4px" id="aggTitle">Detalle</h2>
+    <p class="sub">Ordena haciendo clic en los encabezados. Responde a los mismos filtros de canal, tipo y corredor.</p>
+  </div>
+  <button class="btn-xls" onclick="downloadAggXLS()">⬇ Descargar XLS</button>
+</div>
+<div class="tablewrap"><table id="ta"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+</div>
 </main>
 <footer>ANS · La Insurtech de Chile — Documento de trabajo interno. Metodología: penetración = producción ANS ÷ FECU elegible (solo ramos objetivo ANS); headroom = FECU elegible − producción ANS; segmentos por cortes; universo red sin Grandes Brokers. Corte penetración: 30%.</footer>
 <script>
@@ -206,6 +234,7 @@ function segSel(){return selOf('fspanel');}
 
 
 
+let vista='corr';
 let F=[...CORR], sortK='head', sortD=-1, chart=null, page=1;
 let ejeY='pen';
 function setEjeY(e){ejeY=e;
@@ -500,7 +529,7 @@ function pager(n,np){
 }
 function goPage(x){page=x;tabla(F);document.getElementById('tc').scrollIntoView({behavior:'smooth',block:'start'});}
 function sortBy(k){sortD=(sortK===k)?-sortD:-1;sortK=k;page=1;tabla(F);}
-function apply(){F=filtered();page=1;kpis(F);legend(F);draw(F);tabla(F);if(typeof charts==='function'&&document.getElementById('fy').options.length)charts();}
+function apply(){F=filtered();page=1;if(vista!=='corr'){aggRender();return;}kpis(F);legend(F);draw(F);tabla(F);if(typeof charts==='function'&&document.getElementById('fy').options.length)charts();}
 function reset(){document.querySelectorAll('.mspanel input').forEach(i=>i.checked=false);document.getElementById('fq').value='';apply();}
 
 let ccia=null,cram=null,cmes=null,cfecu=null,RUTSEL=null;
@@ -581,6 +610,128 @@ function charts(){
   .sort((a,b)=>b.m-a.m);
  cfecu=hbar(document.getElementById('cfecu'),cfecu,ff.map(x=>x.n),
   [{label:'FECU elegible (UF)',data:ff.map(x=>Math.round(x.m)),backgroundColor:'#eda100'}],true);
+}
+
+// ===================== VISTAS COMPAÑÍA / RAMO =====================
+let aSortK='r26',aSortD=-1,cagg=null,AGG=[];
+function setVista(v){
+ vista=v;
+ ['corr','cia','ramo'].forEach(k=>document.getElementById('vt-'+k).classList.toggle('on',k===v));
+ document.getElementById('viewCorr').style.display=v==='corr'?'':'none';
+ document.getElementById('viewAgg').style.display=v==='corr'?'none':'';
+ aSortK='r26';aSortD=-1; apply();
+}
+function hasCorrFilter(){
+ return !!document.getElementById('fq').value || ['fspanel','frpanel','fepanel','fcpanel','ftpanel'].some(p=>selOf(p).length>0);
+}
+const pctTxt=c=>c==null?'—':(c.toFixed(1).replace('.',',')+'%');
+function cumplHTML(c){if(c==null)return '—';const col=c>=100?'#1BAF7A':c>=90?'#D97706':'#B3261E';
+ return `<span style="color:${col};font-weight:700">${Math.round(c)}%</span>`;}
+function aggData(){
+ const dim=vista==='cia'?1:2, NAMES=vista==='cia'?CIAX:RAMOX;
+ const cf=hasCorrFilter();
+ const sel=new Set(F.map(x=>CORR.indexOf(x))); if(!cf) sel.add(-1);
+ const tf=tipoField==='pt26'?0:tipoField==='pp26'?1:null;
+ const G={}; let fuera=0;
+ const mk=k=>G[k]=G[k]||{k,n:NAMES[k],y:[0,0],a:[0,0],f:[0,0],p:[0,0],act:{}};
+ for(const [ci,cia,ra,can,tp,v26,v25y,v25f] of DX){
+  if(!sel.has(ci)) continue; if(tf!==null&&tp!==tf) continue;
+  const g=mk(dim===1?cia:ra); g.a[can]+=v26; g.y[can]+=v25y; g.f[can]+=v25f;
+  if(ci>=0){ if(canalField==='all'||(canalField==='pp26'&&can===0)||(canalField==='pt26'&&can===1)) g.act[ci]=(g.act[ci]||0)+v26; }
+  else if(canalField==='all'||(canalField==='pp26'&&can===0)||(canalField==='pt26'&&can===1)) fuera+=v26;
+ }
+ for(const [cia,ra,can,tp,v] of PP){ if(tf!==null&&tp!==tf) continue; mk(dim===1?cia:ra).p[can]+=v; }
+ const pk=v=>canalField==='pp26'?v[0]:canalField==='pt26'?v[1]:v[0]+v[1];
+ let rows=Object.values(G).map(g=>{
+  const r26=pk(g.a),r25=pk(g.y),pp=pk(g.p);
+  return {n:g.n,nc:Object.values(g.act).filter(v=>v>0).length,
+   y:g.y,a:g.a,f:g.f,r25,r26,crec:crecOf(r26,r25),
+   ppto:cf?null:pp,cum:(!cf&&pp>0)?r26/pp*100:null,dif:cf?null:r26-pp,f25:pk(g.f)};
+ }).filter(r=>Math.abs(r.r26)+Math.abs(r.r25)+Math.abs(r.f25)+(r.ppto?Math.abs(r.ppto):0)>0.5);
+ const tot26=rows.reduce((s,r)=>s+r.r26,0);
+ rows.forEach(r=>r.part=tot26?r.r26/tot26*100:null);
+ return {rows,cf,fuera,tot26};
+}
+function aSort(k){aSortD=(aSortK===k)?-aSortD:-1;aSortK=k;aggRender();}
+function aggRender(){
+ const {rows,cf,fuera}=aggData(); AGG=rows;
+ const lbl=vista==='cia'?'Compañía':'Ramo';
+ const sv=(r,k)=>{if(k==='n')return r.n;if(k==='y0')return r.y[0];if(k==='y1')return r.y[1];if(k==='a0')return r.a[0];if(k==='a1')return r.a[1];if(k==='f0')return r.f[0];if(k==='f1')return r.f[1];const v=r[k];return v==null?-1e12:v;};
+ rows.sort((a,b)=>{const x=sv(a,aSortK),y=sv(b,aSortK);return (x>y?1:x<y?-1:0)*aSortD;});
+ const showPP=canalField!=='pt26',showPT=canalField!=='pp26',showTot=canalField==='all';
+ const tt=tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':'';
+ const yy=String(META.anio).slice(2)+'/'+String(META.anio_ant).slice(2);
+ const cTxt=canalField==='pp26'?' Portal':canalField==='pt26'?' Trad.':' Total';
+ const MOR='#4A1E8C',GRN='#1B7A50',DK='#231A3C',AMB='#D97706',LIL='#7a5aaa';
+ const cols=[
+  ['n',lbl,DK,true,false],['nc','Corredores activos 2026',DK,true,true],
+  ['y0','Portal+SS '+META.anio_ant+MLBL+tt,MOR,showPP,true],['y1','Tradic. '+META.anio_ant+MLBL+tt,MOR,showPT,true],['r25','Total '+META.anio_ant+MLBL+tt,MOR,showTot,true],
+  ['a0','Portal+SS '+META.anio+tt,GRN,showPP,true],['a1','Tradic. '+META.anio+tt,GRN,showPT,true],['r26','Total '+META.anio+tt,GRN,showTot,true],
+  ['crec','% Crec. '+yy+cTxt,DK,true,true],
+  ['ppto','Ppto '+META.anio+MLBL+cTxt+tt,AMB,true,true],['cum','% Cumpl. Ppto',AMB,true,true],['dif','Dif. UF vs Ppto',AMB,true,true],
+  ['part','% Part. '+META.anio,DK,true,true],
+  ['f0','Portal+SS '+META.anio_ant+' completo'+tt,LIL,showPP,true],['f1','Tradic. '+META.anio_ant+' completo'+tt,LIL,showPT,true],['f25','Total '+META.anio_ant+' completo'+tt,LIL,showTot,true]];
+ // con canal único, la columna total del canal = la del canal: r25/r26/f25 se muestran vía y/a/f
+ document.querySelector('#ta thead').innerHTML='<tr>'+cols.filter(c=>c[3]).map(c=>`<th class="${c[4]?'num':''}" style="background:${c[2]}" onclick="aSort('${c[0]}')">${c[1]}${aSortK===c[0]?(aSortD<0?' ▼':' ▲'):''}</th>`).join('')+'</tr>';
+ const cell=(r,k)=>{
+  switch(k){case 'n':return r.n;case 'nc':return fmt(r.nc);
+   case 'y0':return fmt(r.y[0]);case 'y1':return fmt(r.y[1]);case 'r25':return fmt(r.r25);
+   case 'a0':return fmt(r.a[0]);case 'a1':return fmt(r.a[1]);case 'r26':return '<b>'+fmt(r.r26)+'</b>';
+   case 'crec':return fmtCrec(r.crec,r.r26);
+   case 'ppto':return r.ppto==null?'—':fmt(r.ppto);case 'cum':return cumplHTML(r.cum);
+   case 'dif':return r.dif==null?'—':`<span style="color:${r.dif>=0?'#1BAF7A':'#B3261E'}">${r.dif>=0?'+':''}${fmt(r.dif)}</span>`;
+   case 'part':return pctTxt(r.part);
+   case 'f0':return fmt(r.f[0]);case 'f1':return fmt(r.f[1]);case 'f25':return fmt(r.f25);}
+ };
+ document.querySelector('#ta tbody').innerHTML=rows.map(r=>'<tr>'+cols.filter(c=>c[3]).map(c=>`<td class="${c[4]?'num':''}">${cell(r,c[0])}</td>`).join('')+'</tr>').join('');
+ // totales
+ const T={n:'Total',nc:new Set(),y:[0,0],a:[0,0],f:[0,0]}; let tp=0;
+ rows.forEach(r=>{for(let i=0;i<2;i++){T.y[i]+=r.y[i];T.a[i]+=r.a[i];T.f[i]+=r.f[i];} if(r.ppto!=null)tp+=r.ppto;});
+ const pk=v=>canalField==='pp26'?v[0]:canalField==='pt26'?v[1]:v[0]+v[1];
+ T.r25=pk(T.y);T.r26=pk(T.a);T.f25=pk(T.f);T.crec=crecOf(T.r26,T.r25);T.ppto=cf?null:tp;T.cum=(!cf&&tp>0)?T.r26/tp*100:null;T.dif=cf?null:T.r26-tp;T.part=100;
+ T.nc=F.filter(x=>pick(g26(x))>0).length;
+ document.querySelector('#ta tfoot').innerHTML='<tr>'+cols.filter(c=>c[3]).map(c=>`<td class="${c[4]?'num':''}">${cell(T,c[0])}</td>`).join('')+'</tr>';
+ document.getElementById('aggTitle').innerHTML=`Detalle ${lbl} <span style="font-weight:normal;font-size:13px;color:var(--gris)">(${rows.length} ${vista==='cia'?'compañías':'ramos'} · ${F.length} corredores en filtro)</span>`;
+ // nota
+ document.getElementById('aggnote').innerHTML=cf
+  ? '⚠️ Hay filtros de corredor activos (segmento, región, ejecutivo, categoría, tendencia o búsqueda). El presupuesto está asignado por compañía y ramo, no por corredor, por lo que el cumplimiento no aplica a esta selección. Limpia esos filtros para ver el cumplimiento.'
+  : `Sin filtros de corredor: la producción incluye UF ${fmt(fuera)} de corredores fuera de la red (Grandes Brokers y no vigentes), para que el real sea comparable con el presupuesto total ANS. Canal y tipo de negocio sí aplican al presupuesto.`;
+ // KPIs
+ const card=(t,col,bg,real,y25,pp)=>{const cu=(pp!=null&&pp>0)?real/pp*100:null;
+  return `<div class="card" style="border-top:3px solid ${col};background:${bg}"><div class="k">${t} ${META.anio}${tt} (UF)</div><div class="v" style="color:${col}">${fmt(real)}</div>
+  <div class="l">${fmtCrec(crecOf(real,y25),real)} vs ${META.anio_ant}${MLBL} (${fmt(y25)})</div>
+  <div class="l">${pp==null?'Ppto: no aplica con filtro de corredor':'Ppto '+fmt(pp)+' · Cumpl. '+cumplHTML(cu)}</div></div>`;};
+ const P=[0,0]; if(!cf) rows.forEach(r=>{}); 
+ const tf=tipoField==='pt26'?0:tipoField==='pp26'?1:null; const PPc=[0,0];
+ for(const [cia,ra,can,tpp,v] of PP){ if(tf!==null&&tpp!==tf) continue; PPc[can]+=v; }
+ let html=`<div class="card"><div class="k">Corredores activos ${META.anio}</div><div class="v">${fmt(T.nc)}</div><div class="l">de ${F.length} en filtro</div></div>`;
+ if(showPP) html+=card('Portal+SS','#006d63','#e0f6f3',T.a[0],T.y[0],cf?null:PPc[0]);
+ if(showPT) html+=card('Tradicional','#4A1E8C','#ede9fb',T.a[1],T.y[1],cf?null:PPc[1]);
+ if(showTot) html+=card('Total ANS','#0f5235','#edfaf5',T.a[0]+T.a[1],T.y[0]+T.y[1],cf?null:PPc[0]+PPc[1]);
+ document.getElementById('kpis').innerHTML=html;
+ // gráfico
+ const top=[...rows].sort((a,b)=>b.r26-a.r26).slice(0,15);
+ document.getElementById('aggChartT').textContent=`${lbl}: ${META.anio} vs ${META.anio_ant}${MLBL}`+(cf?'':' vs Ppto');
+ document.getElementById('aggChartS').textContent=`Top ${top.length} por producción ${META.anio}${cTxt.toLowerCase()}${tt}. Responde a los filtros de arriba.`;
+ const ds=[{label:META.anio_ant+MLBL,data:top.map(r=>Math.round(r.r25)),backgroundColor:'#B4A7D6'},
+  {label:String(META.anio)+MLBL,data:top.map(r=>Math.round(r.r26)),backgroundColor:'#00B9AE'}];
+ if(!cf) ds.push({label:'Ppto '+META.anio+MLBL,data:top.map(r=>Math.round(r.ppto||0)),backgroundColor:'#D97706'});
+ cagg=hbar(document.getElementById('cagg'),cagg,top.map(r=>r.n),ds,true);
+}
+function downloadAggXLS(){
+ const lbl=vista==='cia'?'Compañía':'Ramo', tt=tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':'';
+ const head=[lbl,'Corredores activos '+META.anio,'Portal+SS '+META.anio_ant+MLBL+tt,'Tradicional '+META.anio_ant+MLBL+tt,'Total '+META.anio_ant+MLBL+tt,
+  'Portal+SS '+META.anio+tt,'Tradicional '+META.anio+tt,'Total '+META.anio+tt,'% Crec. '+META.anio+'/'+META.anio_ant,
+  'Ppto '+META.anio+MLBL,'% Cumpl. Ppto','Dif. UF vs Ppto','% Part. '+META.anio,
+  'Portal+SS '+META.anio_ant+' completo'+tt,'Tradicional '+META.anio_ant+' completo'+tt,'Total '+META.anio_ant+' completo'+tt];
+ const r1=v=>Math.round(v*10)/10;
+ const rows=AGG.map(r=>[r.n,r.nc,r1(r.y[0]),r1(r.y[1]),r1(r.y[0]+r.y[1]),r1(r.a[0]),r1(r.a[1]),r1(r.a[0]+r.a[1]),
+  r.crec==null?'':r1(r.crec),r.ppto==null?'':r1(r.ppto),r.cum==null?'':r1(r.cum),r.dif==null?'':r1(r.dif),r.part==null?'':r1(r.part),
+  r1(r.f[0]),r1(r.f[1]),r1(r.f[0]+r.f[1])]);
+ const ws=XLSX.utils.aoa_to_sheet([head,...rows]); ws['!cols']=head.map((h,i)=>({wch:i===0?32:16}));
+ const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Vista '+lbl);
+ const canal=canalField==='pp26'?'Portal':canalField==='pt26'?'Tradicional':'Todos';
+ XLSX.writeFile(wb,`ANS_Vista_${lbl}_${canal}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 apply();charts();
 </script></body></html>
