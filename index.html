@@ -647,13 +647,15 @@ function aggData(){
  const keyOf=(cia,ra)=>vista==='cia'?cia:fam?RAMO2FAM[RAMOX[ra]]:ra;
  const cf=hasCorrFilter();
  const selRed=new Set(F.map(x=>CORR.indexOf(x)));
- const sel=new Set(selRed); if(!cf) sel.add(-1);
+ const sel=selRed; // solo red: cuadra con la vista Corredor
  const tf=tipoField==='pt26'?0:tipoField==='pp26'?1:null;
  const inCanal=can=>canalField==='all'||(canalField==='pp26'&&can===0)||(canalField==='pt26'&&can===1);
- const G={}; let fuera=0;
+ const G={}; let fuera=0; const O={y:[0,0],a:[0,0],f:[0,0]};
  const mk=k=>G[k]=G[k]||{k,n:NAMES[k],y:[0,0],a:[0,0],f:[0,0],fr:[0,0],p:[0,0],fecu:null,act:{}};
  for(const [ci,cia,ra,can,tp,v26,v25y,v25f] of DX){
-  if(!sel.has(ci)) continue; if(tf!==null&&tp!==tf) continue;
+  if(tf!==null&&tp!==tf) continue;
+  if(ci<0){ if(!cf){O.a[can]+=v26;O.y[can]+=v25y;O.f[can]+=v25f;} continue; }
+  if(!sel.has(ci)) continue;
   const g=mk(keyOf(cia,ra)); g.a[can]+=v26; g.y[can]+=v25y; g.f[can]+=v25f;
   if(ci>=0){ g.fr[can]+=v25f; if(inCanal(can)) g.act[ci]=(g.act[ci]||0)+v26; }
   else if(inCanal(can)) fuera+=v26;
@@ -676,7 +678,7 @@ function aggData(){
  }).filter(r=>Math.abs(r.r26)+Math.abs(r.r25)+Math.abs(r.f25)+(r.ppto?Math.abs(r.ppto):0)+(r.fecu?r.fecu:0)>0.5);
  const tot26=rows.reduce((s,r)=>s+r.r26,0);
  rows.forEach(r=>r.part=tot26?r.r26/tot26*100:null);
- return {rows,cf,fuera,tot26,fecuTot,fam};
+ return {rows,cf,O,tot26,fecuTot,fam};
 }
 function aSort(k){aSortD=(aSortK===k)?-aSortD:-1;aSortK=k;aggRender();}
 const OLDDATA='<b style="color:#B3261E">⚠️ El datos_segmentacion.js publicado es una versión anterior: falta la FECU por compañía.</b> Sube a GitHub el datos_segmentacion.js de esta entrega y recarga con Ctrl+F5 (Cmd+Shift+R en Mac).<br>';
@@ -685,7 +687,8 @@ function aggRender(){
   document.getElementById('aggnote').innerHTML=OLDDATA;
   if(typeof DX==='undefined'||typeof PP==='undefined') return;
  }
- const {rows,cf,fuera,fecuTot,fam}=aggData(); AGG=rows;
+ const {rows,cf,O,fecuTot,fam}=aggData(); AGG=rows;
+ const pk2=v=>canalField==='pp26'?v[0]:canalField==='pt26'?v[1]:v[0]+v[1];
  const lbl=vista==='cia'?'Compañía':(fam?'Familia FECU':'Ramo');
  const sv=(r,k)=>{if(k==='n')return r.n;if(k==='y0')return r.y[0];if(k==='y1')return r.y[1];if(k==='a0')return r.a[0];if(k==='a1')return r.a[1];if(k==='f0')return r.f[0];if(k==='f1')return r.f[1];const v=r[k];return v==null?-1e12:v;};
  rows.sort((a,b)=>{const x=sv(a,aSortK),y=sv(b,aSortK);return (x>y?1:x<y?-1:0)*aSortD;});
@@ -706,13 +709,13 @@ function aggRender(){
  // con canal único, la columna total del canal = la del canal: r25/r26/f25 se muestran vía y/a/f
  document.querySelector('#ta thead').innerHTML='<tr>'+cols.filter(c=>c[3]).map(c=>`<th class="${c[4]?'num':''}" style="background:${c[2]}" onclick="aSort('${c[0]}')">${c[1]}${aSortK===c[0]?(aSortD<0?' ▼':' ▲'):''}</th>`).join('')+'</tr>';
  const cell=(r,k)=>{
-  switch(k){case 'n':return r.n;case 'nc':return fmt(r.nc);
+  switch(k){case 'n':return r.n;case 'nc':return r.nc===''?'':fmt(r.nc);
    case 'y0':return fmt(r.y[0]);case 'y1':return fmt(r.y[1]);case 'r25':return fmt(r.r25);
    case 'a0':return fmt(r.a[0]);case 'a1':return fmt(r.a[1]);case 'r26':return '<b>'+fmt(r.r26)+'</b>';
    case 'crec':return fmtCrec(r.crec,r.r26);
    case 'ppto':return r.ppto==null?'—':fmt(r.ppto);case 'cum':return cumplHTML(r.cum);
    case 'dif':return r.dif==null?'—':`<span style="color:${r.dif>=0?'#1BAF7A':'#B3261E'}">${r.dif>=0?'+':''}${fmt(r.dif)}</span>`;
-   case 'part':return pctTxt(r.part);
+   case 'part':return r.part==null?'':pctTxt(r.part);
    case 'est':{const c={'ANS':'#4A1E8C','Onboarding':'#C2672E','No ANS':'#6B7280'}[r.est]||'#6B7280';return r.est?`<span class="pill" style="background:${c}">${r.est}</span>`:'';}
    case 'fecu':return r.fecu==null?'—':fmt(r.fecu);case 'head':return r.head==null?'—':'<b>'+fmt(r.head)+'</b>';
    case 'pen':return r.pen==null?'—':r.pen.toFixed(1).replace('.',',')+'%';
@@ -723,32 +726,41 @@ function aggRender(){
  const T={n:'Total',nc:new Set(),y:[0,0],a:[0,0],f:[0,0]}; let tp=0;
  rows.forEach(r=>{for(let i=0;i<2;i++){T.y[i]+=r.y[i];T.a[i]+=r.a[i];T.f[i]+=r.f[i];} if(r.ppto!=null)tp+=r.ppto;});
  const pk=v=>canalField==='pp26'?v[0]:canalField==='pt26'?v[1]:v[0]+v[1];
- T.r25=pk(T.y);T.r26=pk(T.a);T.f25=pk(T.f);T.crec=crecOf(T.r26,T.r25);T.ppto=cf?null:tp;T.cum=(!cf&&tp>0)?T.r26/tp*100:null;T.dif=cf?null:T.r26-tp;T.part=100;
+ T.n=cf?'Total selección':'Total red (= vista Corredor)';T.r25=pk(T.y);T.r26=pk(T.a);T.f25=pk(T.f);T.crec=crecOf(T.r26,T.r25);T.ppto=null;T.cum=null;T.dif=null;T.part=100;
  T.nc=F.filter(x=>pick(g26(x))>0).length;
  T.est=''; T.fecu=fecuTot; const frT=rows.reduce((s2,r)=>s2+r.fr,0); T.head=Math.max(fecuTot-frT,0); T.pen=fecuTot>0?frT/fecuTot*100:null;
- document.querySelector('#ta tfoot').innerHTML='<tr>'+cols.filter(c=>c[3]).map(c=>`<td class="${c[4]?'num':''}">${cell(T,c[0])}</td>`).join('')+'</tr>';
+ const frow=(R,st)=>'<tr>'+cols.filter(c=>c[3]).map(c=>`<td class="${c[4]?'num':''}" style="${st||''}">${cell(R,c[0])}</td>`).join('')+'</tr>';
+ let foot=frow(T);
+ if(!cf){
+  const Ou={n:'+ Fuera de red (Grandes Brokers y no vigentes)',est:'',nc:'',y:O.y,a:O.a,f:O.f,r25:pk(O.y),r26:pk(O.a),f25:pk(O.f),crec:crecOf(pk(O.a),pk(O.y)),ppto:null,cum:null,dif:null,part:null,fecu:null,head:null,pen:null};
+  const A={n:'Total ANS (vs Ppto)',est:'',nc:'',y:[T.y[0]+O.y[0],T.y[1]+O.y[1]],a:[T.a[0]+O.a[0],T.a[1]+O.a[1]],f:[T.f[0]+O.f[0],T.f[1]+O.f[1]],fecu:null,head:null,pen:null,part:null};
+  A.r25=pk(A.y);A.r26=pk(A.a);A.f25=pk(A.f);A.crec=crecOf(A.r26,A.r25);A.ppto=tp;A.cum=tp>0?A.r26/tp*100:null;A.dif=A.r26-tp;
+  foot+=frow(Ou,'font-weight:normal;background:#fff;border-top:1px solid #e6e2f0;color:#5F5E5A')+frow(A,'background:#ede9fb');
+  window._TANS=A;
+ }
+ document.querySelector('#ta tfoot').innerHTML=foot;
  document.getElementById('aggTitle').innerHTML=`Detalle ${lbl} <span style="font-weight:normal;font-size:13px;color:var(--gris)">(${rows.length} ${vista==='cia'?'compañías':'ramos'} · ${F.length} corredores en filtro)</span>`;
  // nota
  document.getElementById('aggnote').innerHTML=cf
   ? '⚠️ Hay filtros de corredor activos (segmento, región, ejecutivo, categoría, tendencia o búsqueda). El presupuesto está asignado por compañía y ramo, no por corredor, por lo que el cumplimiento no aplica a esta selección. Limpia esos filtros para ver el cumplimiento.'
-  : `Sin filtros de corredor: la producción incluye UF ${fmt(fuera)} de corredores fuera de la red (Grandes Brokers y no vigentes), para que el real sea comparable con el presupuesto total ANS. Canal y tipo de negocio sí aplican al presupuesto.`;
+  : `Las filas y el "Total red" consideran solo los ${CORR.length} corredores de la red, igual que la vista Corredor. El presupuesto incluye toda la operación ANS, por eso el cumplimiento oficial está en la fila "Total ANS (vs Ppto)", que suma UF ${fmt(pk2(O.a))} de Grandes Brokers y corredores no vigentes. El cumplimiento por ${vista==='cia'?'compañía':'ramo'} usa la producción de la red.`;
  document.getElementById('aggnote').innerHTML+='<br>'+(vista==='cia'
   ? 'FECU 2025 por compañía = cartera total de los corredores de la red con cada compañía (todos los ramos; la fuente no abre compañía × ramo). Penetración = producción ANS 2025 completo ÷ FECU de esa compañía.'
   : fam ? 'FECU 2025 elegible homologada de ramos CMF a familias ANS. Penetración = producción ANS 2025 completo ÷ FECU. Tradicional no tiene apertura por ramo, por lo que la penetración por familia considera solo Portal+SS; el total sí incluye Tradicional.'
         : 'FECU 2025 solo en ramos con homologación 1:1 con ramo CMF (RC Profesional, Resp. Civil, Transporte, E. Móvil Contratista, Ingeniería). Para Vehículos, Hogar, Condominio, Pyme y AP usa "Familia FECU". El total corresponde a toda la FECU elegible.');
  if(typeof DFC==='undefined') document.getElementById('aggnote').innerHTML=OLDDATA+document.getElementById('aggnote').innerHTML;
  // KPIs
- const card=(t,col,bg,real,y25,pp)=>{const cu=(pp!=null&&pp>0)?real/pp*100:null;
+ const card=(t,col,bg,real,y25,pp,ans)=>{const cu=(pp!=null&&pp>0)?ans/pp*100:null;
   return `<div class="card" style="border-top:3px solid ${col};background:${bg}"><div class="k">${t} ${META.anio}${tt} (UF)</div><div class="v" style="color:${col}">${fmt(real)}</div>
   <div class="l">${fmtCrec(crecOf(real,y25),real)} vs ${META.anio_ant}${MLBL} (${fmt(y25)})</div>
-  <div class="l">${pp==null?'Ppto: no aplica con filtro de corredor':'Ppto '+fmt(pp)+' · Cumpl. '+cumplHTML(cu)}</div></div>`;};
+  <div class="l">${pp==null?'Ppto: no aplica con filtro de corredor':'Total ANS '+fmt(ans)+' · Ppto '+fmt(pp)+' · Cumpl. '+cumplHTML(cu)}</div></div>`;};
  const P=[0,0]; if(!cf) rows.forEach(r=>{}); 
  const tf=tipoField==='pt26'?0:tipoField==='pp26'?1:null; const PPc=[0,0];
  for(const [cia,ra,can,tpp,v] of PP){ if(tf!==null&&tpp!==tf) continue; PPc[can]+=v; }
  let html=`<div class="card"><div class="k">Corredores activos ${META.anio}</div><div class="v">${fmt(T.nc)}</div><div class="l">de ${F.length} en filtro</div></div>`;
- if(showPP) html+=card('Portal+SS','#006d63','#e0f6f3',T.a[0],T.y[0],cf?null:PPc[0]);
- if(showPT) html+=card('Tradicional','#4A1E8C','#ede9fb',T.a[1],T.y[1],cf?null:PPc[1]);
- if(showTot) html+=card('Total ANS','#0f5235','#edfaf5',T.a[0]+T.a[1],T.y[0]+T.y[1],cf?null:PPc[0]+PPc[1]);
+ if(showPP) html+=card('Portal+SS','#006d63','#e0f6f3',T.a[0],T.y[0],cf?null:PPc[0],T.a[0]+O.a[0]);
+ if(showPT) html+=card('Tradicional','#4A1E8C','#ede9fb',T.a[1],T.y[1],cf?null:PPc[1],T.a[1]+O.a[1]);
+ if(showTot) html+=card('Total','#0f5235','#edfaf5',T.a[0]+T.a[1],T.y[0]+T.y[1],cf?null:PPc[0]+PPc[1],T.a[0]+T.a[1]+O.a[0]+O.a[1]);
  document.getElementById('kpis').innerHTML=html;
  // gráfico
  const top=[...rows].sort((a,b)=>b.r26-a.r26).slice(0,15);
