@@ -3,7 +3,7 @@
 <title>Segmentación de Corredores ANS</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="datos_segmentacion.js"></script>
+<script src="datos_segmentacion.js?v=20261001-fecu"></script>
 <style>
 :root{--mor:#4A1E8C;--tur:#00B9AE;--dark:#231A3C;--gris:#5F5E5A;--light:#F4F1FA;--bd:#e6e2f0}
 *{box-sizing:border-box;margin:0}
@@ -661,7 +661,8 @@ function aggData(){
  for(const [cia,ra,can,tp,v] of PP){ if(tf!==null&&tp!==tf) continue; mk(keyOf(cia,ra)).p[can]+=v; }
  // FECU 2025 (solo red, responde a filtros de corredor)
  let fecuTot=0;
- if(vista==='cia'){ for(const [ci,cia,v] of DFC){ if(!selRed.has(ci)) continue; const g=mk(cia); g.fecu=(g.fecu||0)+v; fecuTot+=v; } }
+ const _DFC=(typeof DFC!=='undefined')?DFC:[];
+ if(vista==='cia'){ for(const [ci,cia,v] of _DFC){ if(!selRed.has(ci)) continue; const g=mk(cia); g.fecu=(g.fecu||0)+v; fecuTot+=v; } }
  else { for(const [ci,fr,v] of DFECU){ if(!selRed.has(ci)) continue; fecuTot+=v;
    if(fam){ const g=mk(FR2FAM[fr]); g.fecu=(g.fecu||0)+v; }
    else if(FR2RAMO[fr]){ const g=mk(RAMOXI[FR2RAMO[fr]]); g.fecu=(g.fecu||0)+v; } } }
@@ -678,7 +679,12 @@ function aggData(){
  return {rows,cf,fuera,tot26,fecuTot,fam};
 }
 function aSort(k){aSortD=(aSortK===k)?-aSortD:-1;aSortK=k;aggRender();}
+const OLDDATA='<b style="color:#B3261E">⚠️ El datos_segmentacion.js publicado es una versión anterior: falta la FECU por compañía.</b> Sube a GitHub el datos_segmentacion.js de esta entrega y recarga con Ctrl+F5 (Cmd+Shift+R en Mac).<br>';
 function aggRender(){
+ if(typeof DX==='undefined'||typeof PP==='undefined'||typeof DFC==='undefined'){
+  document.getElementById('aggnote').innerHTML=OLDDATA;
+  if(typeof DX==='undefined'||typeof PP==='undefined') return;
+ }
  const {rows,cf,fuera,fecuTot,fam}=aggData(); AGG=rows;
  const lbl=vista==='cia'?'Compañía':(fam?'Familia FECU':'Ramo');
  const sv=(r,k)=>{if(k==='n')return r.n;if(k==='y0')return r.y[0];if(k==='y1')return r.y[1];if(k==='a0')return r.a[0];if(k==='a1')return r.a[1];if(k==='f0')return r.f[0];if(k==='f1')return r.f[1];const v=r[k];return v==null?-1e12:v;};
@@ -730,6 +736,7 @@ function aggRender(){
   ? 'FECU 2025 por compañía = cartera total de los corredores de la red con cada compañía (todos los ramos; la fuente no abre compañía × ramo). Penetración = producción ANS 2025 completo ÷ FECU de esa compañía.'
   : fam ? 'FECU 2025 elegible homologada de ramos CMF a familias ANS. Penetración = producción ANS 2025 completo ÷ FECU. Tradicional no tiene apertura por ramo, por lo que la penetración por familia considera solo Portal+SS; el total sí incluye Tradicional.'
         : 'FECU 2025 solo en ramos con homologación 1:1 con ramo CMF (RC Profesional, Resp. Civil, Transporte, E. Móvil Contratista, Ingeniería). Para Vehículos, Hogar, Condominio, Pyme y AP usa "Familia FECU". El total corresponde a toda la FECU elegible.');
+ if(typeof DFC==='undefined') document.getElementById('aggnote').innerHTML=OLDDATA+document.getElementById('aggnote').innerHTML;
  // KPIs
  const card=(t,col,bg,real,y25,pp)=>{const cu=(pp!=null&&pp>0)?real/pp*100:null;
   return `<div class="card" style="border-top:3px solid ${col};background:${bg}"><div class="k">${t} ${META.anio}${tt} (UF)</div><div class="v" style="color:${col}">${fmt(real)}</div>
