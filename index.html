@@ -3,6 +3,7 @@
 <title>Segmentación de Corredores ANS</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="datos_segmentacion.js?v=20261001-fecu"></script>
 <style>
 :root{--mor:#4A1E8C;--tur:#00B9AE;--dark:#231A3C;--gris:#5F5E5A;--light:#F4F1FA;--bd:#e6e2f0}
@@ -488,35 +489,7 @@ function tabla(d){
  pager(d.length,np);
 }
 
-function downloadXLS(){
- const MESx=META.mes||7;
- const v26x=(x)=>tipoField==='pt26'?{pp:x.ppvn||0,pt:x.ptvn||0}:tipoField==='pp26'?{pp:x.pprn||0,pt:x.ptrn||0}:{pp:x.pp26||0,pt:x.pt26||0};
- const v25x=(x)=>tipoField==='pt26'?{pp:x.ppvn25||0,pt:x.ptvn25||0}:tipoField==='pp26'?{pp:x.pprn25||0,pt:x.ptrn25||0}:{pp:x.pp25||0,pt:x.pt25||0};
- const tendDinXLS=(x)=>{const v=v26x(x),w=v25x(x);let r26,r25;if(canalField==='pp26'){r26=v.pp;r25=w.pp;}else if(canalField==='pt26'){r26=v.pt;r25=w.pt;}else{r26=v.pp+v.pt;r25=w.pp+w.pt;}const proy=r26/MESx*12;if(r25<=0)return proy>0?'Nuevo':'Sin actividad';const ra=proy/r25;return ra>1.15?'Creciendo':ra>=0.95?'Estable':ra>=0.6?'Cayendo':'Cayendo fuerte';};
- const ordered=[...F].sort((a,b)=>{const av=sortVal(a,sortK),bv=sortVal(b,sortK);return (av>bv?1:av<bv?-1:0)*sortD;});
- const tt=(tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':'');
- const header=['Corredor','Segmento','Categoría','Región','Ejecutivo','Tendencia',
-   'Portal+SS '+META.anio_ant+MLBL+tt,'Tradicional '+META.anio_ant+MLBL+tt,'Total '+META.anio_ant+MLBL+tt,
-   'Portal+SS '+META.anio+tt,'Tradicional '+META.anio+tt,'Total '+META.anio+tt,
-   '% Crec. '+META.anio+'/'+META.anio_ant+(canalField==='pp26'?' Portal':canalField==='pt26'?' Trad.':' Total'),
-   'FECU elegible','Headroom','Penetración %',
-   'Portal+SS '+META.anio_ant+' completo'+tt,'Tradicional '+META.anio_ant+' completo'+tt,'Total '+META.anio_ant+' completo'+tt];
- const rows=ordered.map(x=>{const v=v26x(x),w=v25x(x),y=g25y(x),c=crecX(x);return [
-  x.n,x.s,x.c||'',x.rg||'',x.e,tendDinG(x),
-  y.pp,y.pt,y.pp+y.pt,
-  v.pp,v.pt,v.pp+v.pt,
-  c==null?'':Math.round(c*10)/10,
-  x.fecu,x.head,x.pen!=null?x.pen:'',
-  w.pp,w.pt,w.pp+w.pt
- ];});
- const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
- ws['!cols']=[{wch:50},{wch:18},{wch:14},{wch:16},{wch:28},{wch:14},
-  {wch:18},{wch:18},{wch:16},{wch:16},{wch:16},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:20},{wch:20},{wch:18}];
- const wb=XLSX.utils.book_new();
- XLSX.utils.book_append_sheet(wb,ws,'Corredores ANS');
- const tipo=prodField==='all'?'Todos':prodField==='pp26'?'Portal_Renovacion':'Tradicional_VentaNueva';
- XLSX.writeFile(wb,`ANS_Corredores_${tipo}_${new Date().toISOString().slice(0,10)}.xlsx`);
-}
+function downloadXLS(){ return xlsCorredores(); }
 function pager(n,np){
  const p=document.getElementById('pager');
  if(np<=1){p.innerHTML=n?'<span class="info">'+n+' corredores</span>':'';return;}
@@ -771,22 +744,119 @@ function aggRender(){
  if(!cf) ds.push({label:'Ppto '+META.anio+MLBL,data:top.map(r=>Math.round(r.ppto||0)),backgroundColor:'#D97706'});
  cagg=hbar(document.getElementById('cagg'),cagg,top.map(r=>r.n),ds,true);
 }
-function downloadAggXLS(){
- const lbl=vista==='cia'?'Compañía':(vista==='ramo'&&ramoMode==='fam'?'Familia FECU':'Ramo'), tt=tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':'';
- const head=[lbl,...(vista==='cia'?['Estado']:[]),'Corredores activos '+META.anio,'Portal+SS '+META.anio_ant+MLBL+tt,'Tradicional '+META.anio_ant+MLBL+tt,'Total '+META.anio_ant+MLBL+tt,
-  'Portal+SS '+META.anio+tt,'Tradicional '+META.anio+tt,'Total '+META.anio+tt,'% Crec. '+META.anio+'/'+META.anio_ant,
-  'Ppto '+META.anio+MLBL,'% Cumpl. Ppto','Dif. UF vs Ppto','% Part. '+META.anio,
-  vista==='cia'?'FECU 2025 (todos los ramos)':'FECU 2025 elegible','Headroom','Penetración %',
-  'Portal+SS '+META.anio_ant+' completo'+tt,'Tradicional '+META.anio_ant+' completo'+tt,'Total '+META.anio_ant+' completo'+tt];
- const r1=v=>Math.round(v*10)/10;
- const rows=AGG.map(r=>[r.n,...(vista==='cia'?[r.est]:[]),r.nc,r1(r.y[0]),r1(r.y[1]),r1(r.y[0]+r.y[1]),r1(r.a[0]),r1(r.a[1]),r1(r.a[0]+r.a[1]),
-  r.crec==null?'':r1(r.crec),r.ppto==null?'':r1(r.ppto),r.cum==null?'':r1(r.cum),r.dif==null?'':r1(r.dif),r.part==null?'':r1(r.part),
-  r.fecu==null?'':r1(r.fecu),r.head==null?'':r1(r.head),r.pen==null?'':r1(r.pen),
-  r1(r.f[0]),r1(r.f[1]),r1(r.f[0]+r.f[1])]);
- const ws=XLSX.utils.aoa_to_sheet([head,...rows]); ws['!cols']=head.map((h,i)=>({wch:i===0?32:16}));
- const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Vista '+lbl);
+function downloadAggXLS(){ return vista==='cia'?xlsCompania():xlsRamo(); }
+
+// ===================== DESCARGAS EXCEL (formato estándar ANS, 3 informes iguales) =====================
+const XC={g25:'FFDAEEF3',g26:'FFFDE9D9',crec:'FFEBF1DE',dif:'FFE5E0EC',f25:'FFC3D69B',hdr:'FFBFBFBF',white:'FFFFFFFF'};
+const colL=n=>{let s='';n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;};
+// cols: {h,w,blk,fill,nf,nf1,v:(row)=>valor, k:'clave', fx:{t:'crec'|'dif'|'pen',a,b}, r1:'sub'|'fx'|'dif1'|null}
+async function buildXLS(sheetName,fileName,cols,rows,opt){
+ if(typeof ExcelJS==='undefined'){alert('No se pudo cargar el generador de Excel (ExcelJS). Revisa tu conexión y recarga la página.');return;}
+ const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet(sheetName,{views:[{showGridLines:false}]});
+ const L={}; cols.forEach((c,i)=>{c.L=colL(i); if(c.k)L[c.k]=c.L;});
+ const n=rows.length+2, F12={name:'Calibri',size:12};
+ const blkStart=i=>i===0||cols[i].blk!==cols[i-1].blk, blkEnd=i=>i===cols.length-1||cols[i].blk!==cols[i+1].blk;
+ const bd=(i,top,bot)=>{const o={};const m={style:'medium'};if(blkStart(i))o.left=m;if(blkEnd(i))o.right=m;if(top)o.top=m;if(bot)o.bottom=m;return o;};
+ const fx=(c,r)=>{const A=L[c.fx.a]+r,B=L[c.fx.b]+r;
+   if(c.fx.t==='crec')return opt.crecBlank?`IF(ISERROR(${A}/${B}-1),,(${A}/${B}-1))`:`IF(ISERROR(${A}/${B}-1),0,(${A}/${B}-1))`;
+   if(c.fx.t==='dif')return `+${A}-${B}`;
+   if(c.fx.t==='pen')return `IF(ISERROR(${A}/${B}),0,(${A}/${B}))`;};
+ const fxRes=(c,get)=>{const a=get(c.fx.a)||0,b=get(c.fx.b)||0;
+   if(c.fx.t==='crec')return b?a/b-1:0; if(c.fx.t==='dif')return a-b; if(c.fx.t==='pen')return (typeof b==='number'&&b)?a/b:0;};
+ // fila 1: subtotales
+ const tot={}; cols.forEach(c=>{if(c.k)tot[c.k]=rows.reduce((s,r)=>{const v=c.v(r);return s+(typeof v==='number'?v:0);},0);});
+ cols.forEach((c,i)=>{const cell=ws.getCell(c.L+'1');cell.font={...F12,bold:true};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XC.white}};
+   if(c.r1==='sub'){cell.value={formula:`${opt.plus?'+':''}SUBTOTAL(9,${c.L}3:${c.L}${n})`,result:tot[c.k]};}
+   else if(c.r1==='fx'&&c.fx.t==='pen'&&opt.penSoloConFecu){const A=L[c.fx.a],B=L[c.fx.b];
+     const num=rows.reduce((s,r)=>{const fe=cols.find(z=>z.k===c.fx.b).v(r);return s+((typeof fe==='number'&&fe>0)?cols.find(z=>z.k===c.fx.a).v(r):0);},0);
+     cell.value={formula:`IF(ISERROR(SUMIF(${B}3:${B}${n},">0",${A}3:${A}${n})/${B}1),0,SUMIF(${B}3:${B}${n},">0",${A}3:${A}${n})/${B}1)`,result:tot[c.fx.b]?num/tot[c.fx.b]:0};}
+   else if(c.r1==='fx'){cell.value={formula:fx(c,1),result:fxRes(c,k=>tot[k])};}
+   else if(c.r1==='dif1'){cell.value={formula:`${opt.plus?'+':''}SUBTOTAL(9,${c.L}3:${c.L}${n})`,result:fxRes(c,k=>tot[k])};}
+   if(c.r1){cell.numFmt=c.nf1||c.nf||'#,##0';cell.alignment={horizontal:'center'};}
+ });
+ ws.getRow(1).height=17;
+ // fila 2: encabezados
+ cols.forEach((c,i)=>{const cell=ws.getCell(c.L+'2');cell.value=c.h;cell.font={...F12,bold:true,italic:true};
+   cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XC.hdr}};cell.alignment={horizontal:i===0?'left':'center',vertical:'middle',wrapText:true};cell.border=bd(i,true,true);
+   ws.getColumn(i+1).width=c.w||16;});
+ ws.getRow(2).height=52;
+ // datos
+ rows.forEach((r,j)=>{const rr=j+3, last=j===rows.length-1, vals={};
+   cols.forEach(c=>{if(c.k)vals[c.k]=c.v(r);});
+   cols.forEach((c,i)=>{const cell=ws.getCell(c.L+rr);
+     if(c.fx) cell.value={formula:fx(c,rr),result:fxRes(c,k=>vals[k])};
+     else {const v=c.v(r); cell.value=(v===undefined||v===null)?null:v;}
+     cell.font=F12; if(c.fill)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:c.fill}};
+     if(c.nf){cell.numFmt=c.nf;cell.alignment={horizontal:'center'};}
+     cell.border=bd(i,false,last);});
+ });
+ ws.autoFilter='A2:'+cols[cols.length-1].L+n;
+ const buf=await wb.xlsx.writeBuffer();
+ const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fileName;document.body.appendChild(a);a.click();
+ setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+}
+function xlsSufijos(){
+ const tt=tipoField==='pt26'?' VN':tipoField==='pp26'?' Ren':'';
  const canal=canalField==='pp26'?'Portal':canalField==='pt26'?'Tradicional':'Todos';
- XLSX.writeFile(wb,`ANS_Vista_${lbl}_${canal}_${new Date().toISOString().slice(0,10)}.xlsx`);
+ const tipo=tipoField==='pt26'?'_VN':tipoField==='pp26'?'_Ren':'';
+ const d=new Date(), fe=d.getFullYear()+String(d.getDate()).padStart(2,'0')+String(d.getMonth()+1).padStart(2,'0');
+ return {tt,tag:canal+tipo+'_'+fe};
+}
+// bloques comunes de producción (mismos títulos y fórmulas en los 3 informes)
+function prodCols(tt,get,b0){
+ const A=META.anio_ant, Y=META.anio, M=MLBL;
+ return [
+  {h:'Portal+SS '+A+M+tt,k:'y0',blk:b0+1,fill:XC.g25,nf:'#,##0',r1:'sub',v:r=>get(r).y[0]},
+  {h:'Tradicional '+A+M+tt,k:'y1',blk:b0+1,fill:XC.g25,nf:'#,##0',r1:'sub',v:r=>get(r).y[1]},
+  {h:'Total '+A+M+tt,k:'yt',blk:b0+1,fill:XC.g25,nf:'#,##0',r1:'sub',v:r=>get(r).y[0]+get(r).y[1]},
+  {h:'Portal+SS '+Y+M+tt,k:'a0',blk:b0+2,fill:XC.g26,nf:'#,##0',r1:'sub',v:r=>get(r).a[0]},
+  {h:'Tradicional '+Y+M+tt,k:'a1',blk:b0+2,fill:XC.g26,nf:'#,##0',r1:'sub',v:r=>get(r).a[1]},
+  {h:'Total '+Y+M+tt,k:'at',blk:b0+2,fill:XC.g26,nf:'#,##0',r1:'sub',v:r=>get(r).a[0]+get(r).a[1]},
+  {h:`% Crec. ${Y}/${A} Portal`,blk:b0+3,fill:XC.crec,nf:'0%',nf1:'0.0%',r1:'fx',fx:{t:'crec',a:'a0',b:'y0'}},
+  {h:`% Crec. ${Y}/${A} Tradicional`,blk:b0+3,fill:XC.crec,nf:'0%',nf1:'0.0%',r1:'fx',fx:{t:'crec',a:'a1',b:'y1'}},
+  {h:`% Crec. ${Y}/${A} Total`,blk:b0+3,fill:XC.crec,nf:'0%',nf1:'0.0%',r1:'fx',fx:{t:'crec',a:'at',b:'yt'}},
+  {h:'Dif UF Portal',blk:b0+4,fill:XC.dif,nf:'#,##0',r1:'fx',fx:{t:'dif',a:'a0',b:'y0'}},
+  {h:'Dif UF Tradicional',blk:b0+4,fill:XC.dif,nf:'#,##0',r1:'fx',fx:{t:'dif',a:'a1',b:'y1'}},
+  {h:'Dif UF Total',blk:b0+4,fill:XC.dif,nf:'#,##0',r1:'fx',fx:{t:'dif',a:'at',b:'yt'}},
+  {h:'Portal+SS '+A+' completo'+tt,k:'f0',blk:b0+5,fill:XC.f25,nf:'#,##0',r1:'sub',v:r=>get(r).f[0]},
+  {h:'Tradicional '+A+' completo'+tt,k:'f1',blk:b0+5,fill:XC.f25,nf:'#,##0',r1:'sub',v:r=>get(r).f[1]},
+  {h:'Total '+A+' completo'+tt,k:'ft',blk:b0+5,fill:XC.f25,nf:'#,##0',r1:'sub',v:r=>get(r).f[0]+get(r).f[1]}];
+}
+function fecuCols(hFecu,b,getF,getH){
+ return [{h:hFecu,k:'fe',blk:b,fill:XC.f25,nf:'#,##0',r1:'sub',v:getF},
+  {h:'Headroom',blk:b,fill:XC.f25,nf:'#,##0',r1:'sub',k:'hd',v:getH},
+  {h:'Penetración %',blk:b,fill:XC.f25,nf:'0%',nf1:'0%',r1:'fx',fx:{t:'pen',a:'ft',b:'fe'}}];
+}
+function xlsCorredores(){
+ const {tt,tag}=xlsSufijos();
+ const ordered=[...F].sort((a,b)=>{const av=sortVal(a,sortK),bv=sortVal(b,sortK);return (av>bv?1:av<bv?-1:0)*sortD;});
+ const v25f=x=>tipoField==='pt26'?{pp:x.ppvn25||0,pt:x.ptvn25||0}:tipoField==='pp26'?{pp:x.pprn25||0,pt:x.ptrn25||0}:{pp:x.pp25||0,pt:x.pt25||0};
+ const get=x=>{const a=g26(x),y=g25y(x),f=v25f(x);return {y:[y.pp,y.pt],a:[a.pp,a.pt],f:[f.pp,f.pt]};};
+ const cols=[
+  {h:'Corredor',blk:0,w:50.8,v:x=>x.n},{h:'Segmento',blk:0,w:18.8,v:x=>x.s},{h:'Categoría',blk:0,w:14.8,v:x=>x.c||''},
+  {h:'Región',blk:0,w:16.8,v:x=>x.rg||''},{h:'Ejecutivo',blk:0,w:25.7,v:x=>x.e},{h:'Tendencia',blk:0,w:15,v:x=>tendDinG(x)},
+  ...prodCols(tt,get,0),
+  ...fecuCols('FECU elegible',6,x=>x.fecu,x=>x.head),
+  {h:'Plan',blk:7,w:17.3,v:x=>null}];
+ return buildXLS('Corredores ANS',`ANS_Vista_Corredores_${tag}.xlsx`,cols,ordered,{plus:false,crecBlank:false});
+}
+function xlsCompania(){
+ const {tt,tag}=xlsSufijos();
+ const cols=[{h:'Compañía',blk:0,w:30,v:r=>r.n},{h:'Estado',blk:0,w:12.5,v:r=>r.est},
+  ...prodCols(tt,r=>r,0),
+  ...fecuCols('FECU 2025 (todos los ramos)',6,r=>r.fecu,r=>r.head)];
+ return buildXLS('Vista Compañía',`ANS_Vista_Compañía_${tag}.xlsx`,cols,AGG,{plus:true,crecBlank:true});
+}
+function xlsRamo(){
+ const {tt,tag}=xlsSufijos(); const fam=ramoMode==='fam';
+ const famOf=n=>{const k=RAMO2FAM[n];return k==null?'':FAMS[k];};
+ const ramosDe=n=>{const k=FAMS.indexOf(n);return Object.keys(RAMO2FAM).filter(r=>RAMO2FAM[r]===k).join(', ');};
+ const cols=[{h:fam?'Familia FECU':'Ramo',blk:0,w:fam?36:27,v:r=>r.n},
+  fam?{h:'Ramos ANS incluidos',blk:0,w:40,v:r=>ramosDe(r.n)}:{h:'Familia FECU',blk:0,w:30,v:r=>famOf(r.n)},
+  ...prodCols(tt,r=>r,0),
+  ...fecuCols('FECU 2025 elegible',6,r=>r.fecu,r=>r.head)];
+ return buildXLS(fam?'Vista Familia FECU':'Vista Ramo',`ANS_Vista_${fam?'Familia_FECU':'Ramo'}_${tag}.xlsx`,cols,AGG,{plus:true,crecBlank:true,penSoloConFecu:!fam});
 }
 apply();charts();
 </script></body></html>
